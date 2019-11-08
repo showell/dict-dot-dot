@@ -54,8 +54,7 @@ toInternalRepresentation dict =
                             }
                     in
                     nodeList (path ++ "l") left
-                        ++ [ node ]
-                        ++ nodeList (path ++ "r") right
+                        ++ (node :: nodeList (path ++ "r") right)
 
                 _ ->
                     []
