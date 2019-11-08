@@ -98,7 +98,7 @@ that lets you look up a `String` (such as user names) and find the associated
         , height : Float
         }
 
-    Internally, it's a red-black tree.
+Internally, it's a red-black tree.
 
 -}
 type Dict k v
