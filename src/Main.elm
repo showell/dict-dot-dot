@@ -1,9 +1,9 @@
 module Main exposing (main)
 
 import Browser
+import DictDotDot as Dict
 import DictInternal
 import Html
-import MyDict as Dict
 
 
 

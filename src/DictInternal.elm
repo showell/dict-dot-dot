@@ -1,6 +1,6 @@
 module DictInternal exposing (toInternalRepresentation)
 
-import MyDict exposing (..)
+import DictDotDot exposing (..)
 
 
 type alias InternalNode k v =
