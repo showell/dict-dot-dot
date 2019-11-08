@@ -1,5 +1,11 @@
 module DictInternal exposing (toInternalRepresentation)
 
+{-| helper(s) to see Dict internal
+
+@docs toInternalRepresentation
+
+-}
+
 import DictDotDot exposing (..)
 
 
