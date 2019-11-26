@@ -17,21 +17,22 @@ def tokenChar(s, i):
 
     return True
 
-def bigSkip(state, *fns):
-    for fn in fns:
-        state = fn(state)
-        if state is None: return
-    return state
+def bigSkip(*fns):
+    def wrapper(state):
+        for fn in fns:
+            state = fn(state)
+            if state is None: return
+        return state
+    return wrapper
 
 def captureSubBlock(keyword, f):
     def wrapper(state):
         state = bigSkip(
-                state,
                 spaceOptional,
                 pKeyword(keyword),
                 pUntil('\n'),
                 spaceOptional
-                )
+                )(state)
         if not state:
             return
 
@@ -39,21 +40,47 @@ def captureSubBlock(keyword, f):
 
     return wrapper
 
+def parseSameLine(parse):
+    return twoPassParse(
+            pUntil('\n'),
+            parse)
+
+def twoPassParse(parse1, parse2):
+    def wrapper(state):
+        (s, iOrig) = state
+        state1 = parse1(state)
+        if state1 is None:
+            return None
+        (s, iEnd) = state1
+        lineText = s[iOrig:iEnd]
+        subState = (lineText, 0)
+
+        state2 = parse2(subState)
+        if state2 is None:
+            return None
+
+        (_, n) = state2
+        return (s, iOrig + n)
+
+    return wrapper
+
 def twoPass(parse, f):
-    def f_(state):
+    def wrapper(state):
         (s, iOrig) = state
         newState = parse(state)
         if newState is None:
             return None
         (s, i) = newState
-        subState = (s[iOrig:i], 0)
+        blockText = s[iOrig:i]
+        print('blockText', blockText)
+        subState = (blockText, 0)
         _, ast = f(subState)
         if ast is None:
             return None
 
         return (newState, ast)
 
-    return f_
+    return wrapper
 
 def skip(parse):
     def f(state):
@@ -64,40 +91,46 @@ def skip(parse):
 
     return f
 
-def captureMany(f, state):
-    asts = []
-    while True:
-        if peek(state, 'STOP'):
-            break
+def captureMany(f):
+    def wrapper(state):
+        asts = []
+        while True:
+            if peek(state, 'STOP'):
+                break
 
-        res = f(state)
-        if res is None: break
-        state, ast = res
-        asts.append(ast)
+            res = f(state)
+            if res is None: break
+            state, ast = res
+            asts.append(ast)
 
-    asts = [a for a in asts if type(a) != Skip]
-    return (state, asts)
+        asts = [a for a in asts if type(a) != Skip]
+        return (state, asts)
+    return wrapper
 
-def captureSeq(state, *fns):
-    asts = []
-    for fn in fns:
-        res = fn(state)
-        if res is None:
-            return
-        state, ast = res
-        asts.append(ast)
+def captureSeq(*fns):
+    def wrapper(state):
+        asts = []
+        for fn in fns:
+            res = fn(state)
+            if res is None:
+                return
+            state, ast = res
+            asts.append(ast)
 
-    asts = [a for a in asts if type(a) != Skip]
-    return (state, asts)
+        asts = [a for a in asts if type(a) != Skip]
+        return (state, asts)
+    return wrapper
 
 class Skip:
     pass
 
-def captureOneOf(state, *fns):
-    for fn in fns:
-        res = fn(state)
-        if res is not None:
-            return res
+def captureOneOf(*fns):
+    def wrapper(state):
+        for fn in fns:
+            res = fn(state)
+            if res is not None:
+                return res
+    return wrapper
 
 def peek(state, kw):
     (s, i) = state
@@ -111,14 +144,14 @@ def advanceState(state, n):
     return (s, i + n)
 
 def optional(f):
-    def f_(state, *args):
+    def wrapper(state, *args):
         origState = state
         res = f(state, *args)
         if res is None:
             return origState
         return res
 
-    return f_
+    return wrapper
 
 def spaceOptional(state):
     (s, i) = state

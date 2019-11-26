@@ -1,22 +1,23 @@
 import types
 
 from parse import (
-        twoPass,
+        advanceState,
+        bigSkip,
         captureMany,
         captureOneOf,
-        skip,
-        spaceRequired,
-        spaceOptional,
-        bigSkip,
-        pKeyword,
-        token,
-        optional,
-        peek,
-        advanceState,
-        pUntil,
-        parseBlock,
         captureSeq,
         captureSubBlock,
+        optional,
+        parseBlock,
+        parseSameLine,
+        peek,
+        pKeyword,
+        pUntil,
+        skip,
+        spaceOptional,
+        spaceRequired,
+        token,
+        twoPass,
         )
 
 def capturePunt(state):
@@ -33,7 +34,6 @@ captureType = twoPass(parseType, capturePunt)
 
 def parseModule(state):
     state = bigSkip(
-            state,
             pKeyword('module'),
             spaceRequired,
             token,
@@ -42,17 +42,16 @@ def parseModule(state):
             spaceOptional,
             pKeyword('('),
             spaceOptional,
-            )
+            )(state)
 
     if state is None: return
 
     while True:
         state = bigSkip(
-                state,
                 token,
                 optional(pKeyword('(..)')),
                 spaceOptional
-                )
+                )(state)
         if state is None: return
 
         if peek(state, ')'):
@@ -60,59 +59,55 @@ def parseModule(state):
             break
 
         state = bigSkip(
-                state,
                 pKeyword(','),
                 spaceOptional
-                )
+                )(state)
         if state is None: return
 
-    state = bigSkip(state, spaceOptional)
+    state = spaceOptional(state)
 
     return state
 
 def parseDocs(state):
     state = bigSkip(
-            state,
             pKeyword('{-| '),
             pUntil('-}'),
             pKeyword('-}'),
             spaceRequired
-            )
+            )(state)
     return state
 
 def parseLineComment(state):
     return bigSkip(
-            state,
             pKeyword('--'),
             pUntil('\n'),
             spaceOptional,
-            )
+            )(state)
 
 def parseImport(state):
     return bigSkip(
-            state,
             pKeyword('import'),
             pUntil('\n'),
             spaceOptional,
-            )
+            )(state)
 
 def parseDef(state):
-    return bigSkip(
-            state,
-            token,
-            spaceOptional,
-            parseParams,
-            spaceOptional,
-            pKeyword('='),
-            spaceOptional,
+    return parseSameLine(
+            bigSkip(
+                token,
+                spaceOptional,
+                parseParams,
+                spaceOptional,
+                pKeyword('='),
+                spaceOptional,
             )
+            )(state)
 
 def captureLet(state):
     res = captureSeq(
-            state,
             captureSubBlock('let', captureLetBindings),
             captureSubBlock('in', capturePunt),
-            )
+            )(state)
 
     if not res:
         return
@@ -125,7 +120,7 @@ def captureLet(state):
 
 def captureLetBindings(state):
     (s, i) = state
-    res = captureMany(captureBinding, state)
+    res = captureMany(captureBinding)(state)
     if res is None:
         printState(state)
         raise Exception('could not get binding')
@@ -133,15 +128,13 @@ def captureLetBindings(state):
 
 def captureExpr(state):
     return captureOneOf(
-            state,
             captureLet,
             captureIf,
             capturePunt,
-            )
+            )(state)
 
 def captureIf(state):
     res = captureSeq(
-            state,
             skip(spaceOptional),
             skip(pKeyword('if')),
             skip(spaceRequired),
@@ -149,7 +142,7 @@ def captureIf(state):
             skip(pKeyword('then')),
             twoPass(pUntil('else'), captureExpr),
             captureSubBlock('else', captureExpr)
-            )
+            )(state)
     if res is None:
         return
     state, ast = res
@@ -161,6 +154,7 @@ def captureBindingBlock(state):
     newState = parseDef(state)
 
     if newState is None:
+        printState(state)
         raise Exception('bad definition')
     return captureExpr(newState)
 
@@ -175,28 +169,25 @@ captureBinding = twoPass(parseBinding, captureBindingBlock)
 
 def parseTuple(state):
     return bigSkip(
-            state,
             spaceOptional,
             pKeyword('('),
             pUntil(')'),
             pKeyword(')'),
             spaceOptional
-            )
+            )(state)
 
 def parseParam(state):
     return bigSkip(
-            state,
             token,
             spaceOptional
-            )
+            )(state)
 
 def parseParams(state):
     while True:
         res = captureOneOf(
-                state,
                 skip(parseParam),
                 skip(parseTuple),
-                )
+                )(state)
 
         if res is None:
             return state
@@ -204,41 +195,38 @@ def parseParams(state):
 
 def parseAnnotation(state):
     newState = bigSkip(
-            state,
             token,
             spaceOptional,
             pKeyword(':')
-            )
+            )(state)
     if newState is None:
         return
     return parseBlock(state)
 
 def captureNoise(state):
     return captureOneOf(
-            state,
             skip(spaceRequired),
             skip(parseModule),
             skip(parseImport),
             skip(parseLineComment),
             skip(parseDocs),
             skip(parseAnnotation),
-            )
+            )(state)
 
 def skipNoise(state):
-    (state, _) = captureMany(captureNoise, state)
+    (state, _) = captureMany(captureNoise)(state)
     return state
 
 def captureStuff(state):
     return captureOneOf(
-            state,
             captureType,
-            captureNoise,
             captureBinding,
-            )
+            captureNoise,
+            )(state)
 
 def parseGeneral(state):
     state = skipNoise(state)
-    (state, ast) = captureMany(captureStuff, state)
+    (state, ast) = captureMany(captureStuff)(state)
     return (state, ast)
 
 def printState(state):
