@@ -1,5 +1,10 @@
 import types
 
+"""
+parser : state -> state
+capture : state -> (state, ast)
+"""
+
 def tokenChar(s, i):
     if i >= len(s):
         return False
@@ -20,9 +25,6 @@ def bigSkip(state, *fns):
         if state is None: return
     return state
 
-def identity(s):
-    return s
-
 def capture(f, parse):
     def f_(state):
         (s, iOrig) = state
@@ -30,18 +32,28 @@ def capture(f, parse):
         if newState is None:
             return None
         (s, i) = newState
-        ast = f(s[iOrig:i])
+        subState = (s[iOrig:i], 0)
+        _, ast = f(subState)
+        if ast is None:
+            return None
+
         return (newState, ast)
 
     return f_
 
 def skip(parse):
-    return capture(Skip, parse)
+    def f(state):
+        newState = parse(state)
+        if newState is None:
+            return
+        return (newState, Skip())
 
-def captureMany(parse, state):
+    return f
+
+def captureMany(capture, state):
     asts = []
     while True:
-        res = parse(state)
+        res = capture(state)
         if res is None: break
         state, ast = res
         asts.append(ast)
@@ -49,11 +61,16 @@ def captureMany(parse, state):
     asts = [a for a in asts if type(a) != Skip]
     return (state, asts)
 
-class Skip:
-    def __init__(self, s):
-        pass
+def capturePunt(state):
+    (s, i) = state
+    newState = ('', 0)
+    ast = 'unparsed: ' + s[i:]
+    return (newState, ast)
 
-def oneOf(state, *fns):
+class Skip:
+    pass
+
+def captureOneOf(state, *fns):
     for fn in fns:
         res = fn(state)
         if res is not None:
@@ -62,6 +79,9 @@ def oneOf(state, *fns):
 def peek(state, kw):
     (s, i) = state
     return s[i:i+len(kw)] == kw
+
+def peekOneOf(state, *kws):
+    return any(peek(state, kw) for kw in kws)
 
 def advanceState(state, n):
     (s, i) = state
@@ -165,7 +185,7 @@ def parseType(state):
     if peek(state, 'type'):
         return parseBlock(state)
 
-captureType = capture(identity, parseType)
+captureType = capture(capturePunt, parseType)
 
 def parseModule(state):
     state = bigSkip(
@@ -243,6 +263,79 @@ def parseDef(state):
             spaceOptional,
             )
 
+def captureLet(state):
+    state = bigSkip(
+            state,
+            spaceOptional,
+            pKeyword('let'),
+            spaceOptional
+            )
+    if not state:
+        return
+
+    state, bindings = capture(captureLetBindings, parseBlock)(state)
+
+    state = bigSkip(
+            state,
+            spaceOptional,
+            pKeyword("in"),
+            spaceOptional,
+            )
+
+    if not state:
+        return
+
+    state, expr = capture(capturePunt, parseBlock)(state)
+    ast = types.Let(bindings=bindings, in_=expr)
+    return state, ast
+
+def captureLetBindings(state):
+    (s, i) = state
+    res = captureMany(captureBinding, state)
+    if res is None:
+        printState(state)
+        raise Exception('could not get binding')
+    return res
+
+def captureExpr(state):
+    return captureOneOf(
+            state,
+            captureLet,
+            captureIf,
+            capturePunt,
+            )
+
+def captureIf(state):
+    state = bigSkip(
+            state,
+            spaceOptional,
+            pKeyword('if'),
+            spaceRequired
+            )
+    if state is None:
+        return
+
+    def parseCond(state):
+        return bigSkip(
+                state,
+                pUntil('then')
+                )
+
+    res = capture(captureExpr, parseCond)(state)
+    if res is None:
+        return
+
+    state, cond = res
+    ast = 'if: ' + str(cond)
+    return (state, ast)
+
+def captureBindingBlock(state):
+    newState = parseDef(state)
+
+    if newState is None:
+        raise Exception('bad definition')
+    return captureExpr(newState)
+
 def parseBinding(state):
     origState = state
     newState = parseDef(state)
@@ -250,46 +343,36 @@ def parseBinding(state):
         return
     return parseBlock(origState)
 
-def transformBinding(s):
-    # MAJOR HACK -- trying to make progress
-    if s.startswith('partition'):
-        state = (s, 0)
-        state = parseDef(state)
+captureBinding = capture(captureBindingBlock, parseBinding)
 
-        if not peek(state, "let"):
-            raise Exception('expected let')
+def parseTuple(state):
+    return bigSkip(
+            state,
+            spaceOptional,
+            pKeyword('('),
+            pUntil(')'),
+            pKeyword(')'),
+            spaceOptional
+            )
 
-        state, let = capture(identity, parseBlock)(state)
-
-        state = spaceOptional(state)
-
-        state = bigSkip(
-                state,
-                spaceOptional,
-                pKeyword("in"),
-                spaceOptional,
-                )
-
-        if not state:
-            raise Exception("expected in")
-
-        _, expr = capture(identity, parseBlock)(state)
-        return types.Let(let=let, in_=expr)
-
-    return Skip(s)
-
-captureBinding = capture(transformBinding, parseBinding)
+def parseParam(state):
+    return bigSkip(
+            state,
+            token,
+            spaceOptional
+            )
 
 def parseParams(state):
     while True:
-        newState = bigSkip(
+        res = captureOneOf(
                 state,
-                token,
-                spaceOptional
+                skip(parseParam),
+                skip(parseTuple),
                 )
-        if newState is None:
+
+        if res is None:
             return state
-        state = newState
+        state, _ = res
 
 def parseAnnotation(state):
     newState = bigSkip(
@@ -303,7 +386,7 @@ def parseAnnotation(state):
     return parseBlock(state)
 
 def captureNoise(state):
-    return oneOf(
+    return captureOneOf(
             state,
             skip(parseModule),
             skip(parseImport),
@@ -317,10 +400,10 @@ def skipNoise(state):
     return state
 
 def captureStuff(state):
-    return oneOf(
+    return captureOneOf(
             state,
-            captureNoise,
             captureType,
+            captureNoise,
             captureBinding,
             )
 
