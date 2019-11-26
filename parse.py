@@ -1,5 +1,3 @@
-import types
-
 """
 parser : state -> state
 capture : state -> (state, ast)
@@ -25,7 +23,23 @@ def bigSkip(state, *fns):
         if state is None: return
     return state
 
-def capture(f, parse):
+def captureSubBlock(keyword, f):
+    def wrapper(state):
+        state = bigSkip(
+                state,
+                spaceOptional,
+                pKeyword(keyword),
+                pUntil('\n'),
+                spaceOptional
+                )
+        if not state:
+            return
+
+        return twoPass(parseBlock, f)(state)
+
+    return wrapper
+
+def twoPass(parse, f):
     def f_(state):
         (s, iOrig) = state
         newState = parse(state)
@@ -50,10 +64,13 @@ def skip(parse):
 
     return f
 
-def captureMany(capture, state):
+def captureMany(f, state):
     asts = []
     while True:
-        res = capture(state)
+        if peek(state, 'STOP'):
+            break
+
+        res = f(state)
         if res is None: break
         state, ast = res
         asts.append(ast)
@@ -61,11 +78,17 @@ def captureMany(capture, state):
     asts = [a for a in asts if type(a) != Skip]
     return (state, asts)
 
-def capturePunt(state):
-    (s, i) = state
-    newState = ('', 0)
-    ast = 'unparsed: ' + s[i:]
-    return (newState, ast)
+def captureSeq(state, *fns):
+    asts = []
+    for fn in fns:
+        res = fn(state)
+        if res is None:
+            return
+        state, ast = res
+        asts.append(ast)
+
+    asts = [a for a in asts if type(a) != Skip]
+    return (state, asts)
 
 class Skip:
     pass
@@ -181,253 +204,3 @@ def parseBlock(state):
 
     return (s, i)
 
-def parseType(state):
-    if peek(state, 'type'):
-        return parseBlock(state)
-
-captureType = capture(capturePunt, parseType)
-
-def parseModule(state):
-    state = bigSkip(
-            state,
-            pKeyword('module'),
-            spaceRequired,
-            token,
-            spaceRequired,
-            pKeyword('exposing'),
-            spaceOptional,
-            pKeyword('('),
-            spaceOptional,
-            )
-
-    if state is None: return
-
-    while True:
-        state = bigSkip(
-                state,
-                token,
-                optional(pKeyword('(..)')),
-                spaceOptional
-                )
-        if state is None: return
-
-        if peek(state, ')'):
-            state = advanceState(state, 1)
-            break
-
-        state = bigSkip(
-                state,
-                pKeyword(','),
-                spaceOptional
-                )
-        if state is None: return
-
-    state = bigSkip(state, spaceOptional)
-
-    return state
-
-def parseDocs(state):
-    state = bigSkip(
-            state,
-            pKeyword('{-| '),
-            pUntil('-}'),
-            pKeyword('-}'),
-            spaceRequired
-            )
-    return state
-
-def parseLineComment(state):
-    return bigSkip(
-            state,
-            pKeyword('--'),
-            pUntil('\n'),
-            spaceOptional,
-            )
-
-def parseImport(state):
-    return bigSkip(
-            state,
-            pKeyword('import'),
-            pUntil('\n'),
-            spaceOptional,
-            )
-
-def parseDef(state):
-    return bigSkip(
-            state,
-            token,
-            spaceOptional,
-            parseParams,
-            spaceOptional,
-            pKeyword('='),
-            spaceOptional,
-            )
-
-def captureLet(state):
-    state = bigSkip(
-            state,
-            spaceOptional,
-            pKeyword('let'),
-            spaceOptional
-            )
-    if not state:
-        return
-
-    state, bindings = capture(captureLetBindings, parseBlock)(state)
-
-    state = bigSkip(
-            state,
-            spaceOptional,
-            pKeyword("in"),
-            spaceOptional,
-            )
-
-    if not state:
-        return
-
-    state, expr = capture(capturePunt, parseBlock)(state)
-    ast = types.Let(bindings=bindings, in_=expr)
-    return state, ast
-
-def captureLetBindings(state):
-    (s, i) = state
-    res = captureMany(captureBinding, state)
-    if res is None:
-        printState(state)
-        raise Exception('could not get binding')
-    return res
-
-def captureExpr(state):
-    return captureOneOf(
-            state,
-            captureLet,
-            captureIf,
-            capturePunt,
-            )
-
-def captureIf(state):
-    state = bigSkip(
-            state,
-            spaceOptional,
-            pKeyword('if'),
-            spaceRequired
-            )
-    if state is None:
-        return
-
-    def parseCond(state):
-        return bigSkip(
-                state,
-                pUntil('then')
-                )
-
-    res = capture(captureExpr, parseCond)(state)
-    if res is None:
-        return
-
-    state, cond = res
-    ast = 'if: ' + str(cond)
-    return (state, ast)
-
-def captureBindingBlock(state):
-    newState = parseDef(state)
-
-    if newState is None:
-        raise Exception('bad definition')
-    return captureExpr(newState)
-
-def parseBinding(state):
-    origState = state
-    newState = parseDef(state)
-    if newState is None:
-        return
-    return parseBlock(origState)
-
-captureBinding = capture(captureBindingBlock, parseBinding)
-
-def parseTuple(state):
-    return bigSkip(
-            state,
-            spaceOptional,
-            pKeyword('('),
-            pUntil(')'),
-            pKeyword(')'),
-            spaceOptional
-            )
-
-def parseParam(state):
-    return bigSkip(
-            state,
-            token,
-            spaceOptional
-            )
-
-def parseParams(state):
-    while True:
-        res = captureOneOf(
-                state,
-                skip(parseParam),
-                skip(parseTuple),
-                )
-
-        if res is None:
-            return state
-        state, _ = res
-
-def parseAnnotation(state):
-    newState = bigSkip(
-            state,
-            token,
-            spaceOptional,
-            pKeyword(':')
-            )
-    if newState is None:
-        return
-    return parseBlock(state)
-
-def captureNoise(state):
-    return captureOneOf(
-            state,
-            skip(parseModule),
-            skip(parseImport),
-            skip(parseLineComment),
-            skip(parseDocs),
-            skip(parseAnnotation),
-            )
-
-def skipNoise(state):
-    (state, _) = captureMany(captureNoise, state)
-    return state
-
-def captureStuff(state):
-    return captureOneOf(
-            state,
-            captureType,
-            captureNoise,
-            captureBinding,
-            )
-
-def parseGeneral(state):
-    state = skipNoise(state)
-    (state, ast) = captureMany(captureStuff, state)
-    return (state, ast)
-
-def printState(state):
-    (s, i) = state
-    print('state:\n' + s[i: i+30])
-
-def parse(fn):
-    with open(fn) as f:
-        s = f.read()
-
-    state = (s, 0)
-    (state, asts) = parseGeneral(state)
-
-    for ast in asts:
-        print('==')
-        print(ast)
-
-    printState(state)
-
-fn = 'src/DictDotDot.elm'
-parse(fn)

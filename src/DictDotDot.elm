@@ -624,7 +624,6 @@ foldl func acc dict =
         _ ->
             acc
 
-
 {-| Fold over the key-value pairs in a dictionary from highest key to lowest key.
 
     import Dict exposing (Dict)
@@ -683,6 +682,7 @@ partition isGood dict =
     foldl add ( empty, empty ) dict
 
 
+STOP
 
 -- LISTS
 
