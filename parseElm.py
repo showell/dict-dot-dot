@@ -197,11 +197,13 @@ def parseAnnotation(state):
     newState = bigSkip(
             token,
             spaceOptional,
-            pKeyword(':')
+            pKeyword(':'),
+            pUntil('\n'),
             )(state)
     if newState is None:
         return
-    return parseBlock(state)
+    state = parseBlock(state)
+    return state
 
 def captureNoise(state):
     return captureOneOf(

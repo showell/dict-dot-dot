@@ -36,7 +36,7 @@ def captureSubBlock(keyword, f):
         if not state:
             return
 
-        return twoPass(parseBlock, f)(state)
+        return twoPass(parseMyLevel, f)(state)
 
     return wrapper
 
@@ -72,7 +72,6 @@ def twoPass(parse, f):
             return None
         (s, i) = newState
         blockText = s[iOrig:i]
-        print('blockText', blockText)
         subState = (blockText, 0)
         _, ast = f(subState)
         if ast is None:
@@ -225,6 +224,17 @@ def indentLevel(s, i):
 
     return n
 
+
+def parseMyLevel(state):
+    (s, i) = state
+    level = indentLevel(s, i)
+
+    i = readline(s, i)
+
+    while i < len(s) and indentLevel(s, i) >= level:
+        i = readline(s, i)
+
+    return (s, i)
 
 def parseBlock(state):
     (s, i) = state

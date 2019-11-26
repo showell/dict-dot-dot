@@ -583,7 +583,7 @@ merge leftStep bothStep rightStep leftDict rightDict initialResult =
     in
     List.foldl (\( k, v ) result -> leftStep k v result) intermediateResult leftovers
 
-
+STOP
 
 -- TRANSFORM
 
@@ -682,7 +682,7 @@ partition isGood dict =
     foldl add ( empty, empty ) dict
 
 
-STOP
+
 -- LISTS
 
 
