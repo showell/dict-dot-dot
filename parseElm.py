@@ -81,19 +81,16 @@ captureCaseOf = \
             )
         )
 
-def capturePatternDef(state):
-    return \
-        transform(
-            types.PatternDef,
-            captureSeq(
-                twoPass(
-                    pUntilLineEndsWith('->'),
-                    capturePunt,
-                    ),
-                skip(pLine),
-                skip(spaceOptional)
+capturePatternDef = \
+    transform(
+        types.PatternDef,
+        captureSeq(
+            captureUntilKeywordEndsLine(
+                '->',
+                capturePunt
                 ),
-            )(state)
+            ),
+        )
 
 def captureOneCase(state):
     return \
