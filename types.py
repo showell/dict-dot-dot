@@ -9,6 +9,38 @@ def j(*lst):
 def jj(lst):
     return '\n\n'.join(str(item) for item in lst)
 
+def commas(items):
+    if len(items) == 0:
+        return 'MISSING params!'
+
+    if len(items) == 1:
+        return items[0]
+
+    return items[0] + '(' + ', '.join(str(x) for x in items[1:]) + ')'
+
+class UnParsed:
+    def __init__(self, ast):
+        self.ast = ast
+
+    def __str__(self):
+        return 'unparsed: ' + self.ast
+
+class Tuple:
+    def __init__(self, ast):
+        self.ast = ast
+
+    def __str__(self):
+        return 'TUP: ' + str(self.ast)
+
+class Annotation:
+    def __init__(self, ast):
+        self.ast = ast
+
+    def __str__(self):
+        return j(
+            'ANNOTATION',
+            self.ast)
+
 class Type:
     def __init__(self, ast):
         self.ast = ast
@@ -18,6 +50,22 @@ class Type:
             'TYPE',
             self.ast)
 
+class Call:
+    def __init__(self, ast):
+        self.items = ast
+
+    def __str__(self):
+        return j(
+            'CALL ' + commas(self.items)
+            )
+
+class Params:
+    def __init__(self, ast):
+        self.patterns = ast
+
+    def __str__(self):
+        return ' '.join(str(p) for p in self.patterns)
+
 class Binding:
     def __init__(self, ast):
         self.def_ = ast[0]
@@ -26,6 +74,7 @@ class Binding:
     def __str__(self):
         return j(
             self.def_,
+            'EXPR',
             indent(self.expr))
 
 class If:
@@ -45,10 +94,15 @@ class If:
 
 class Def:
     def __init__(self, ast):
-        self.var = ast
+        self.var = ast[0]
+        self.params = ast[1]
 
     def __str__(self):
-        return 'ASSIGN: ' + self.var
+        return j(
+            'ASSIGN',
+            indent(self.var),
+            indent(self.params),
+            )
 
 class Let:
     def __init__(self, ast):

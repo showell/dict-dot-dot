@@ -4,12 +4,15 @@ from parse import (
         advanceState,
         bigSkip,
         captureKeywordBlock,
-        captureMany,
+        captureOneOrMore,
+        captureZeroOrMore,
         captureOneOf,
         captureSeq,
         captureSubBlock,
         captureUntilKeywordEndsLine,
         grab,
+        onlyIf,
+        parseAll,
         parseBlock,
         parseKeywordBlock,
         parseMyLevel,
@@ -36,11 +39,11 @@ def captureExpr(state):
     return doCaptureExpr(state)
 
 # This should obviously eventually go away!
-def capturePunt(state):
-    (s, i) = state
-    newState = ('', 0)
-    ast = 'unparsed: ' + s[i:].strip()
-    return (newState, ast)
+capturePunt = \
+    transform(
+        types.UnParsed,
+        grab(parseAll)
+    )
 
 parseModule = parseKeywordBlock('module')
 
@@ -61,11 +64,18 @@ captureIf = \
         types.If,
         captureSeq(
             skip(pKeyword('if')),
-            skip(spaceRequired),
-            twoPass(pUntil('then'), captureExpr),
-            skip(pKeyword('then')),
-            twoPass(pUntil('else'), captureExpr),
-            captureSubBlock('else', captureExpr)
+            captureUntilKeywordEndsLine(
+                'then',
+                captureExpr
+                ),
+            twoPass(
+                parseMyLevel,
+                captureExpr
+                ),
+            captureSubBlock(
+                'else',
+                captureExpr
+                ),
             )
         )
 
@@ -92,55 +102,69 @@ capturePatternDef = \
             ),
         )
 
-def captureOneCase(state):
-    return \
-        transform(
-            types.OneCase,
-            captureSeq(
-                capturePatternDef,
-                skip(spaceOptional),
-                twoPass(
-                    parseMyLevel,
-                    captureExpr,
-                    ),
+captureOneCase = \
+    transform(
+        types.OneCase,
+        captureSeq(
+            capturePatternDef,
+            skip(spaceOptional),
+            twoPass(
+                parseMyLevel,
+                captureExpr,
                 ),
-            )(state)
+            ),
+        )
 
-def captureCaseRaw(state):
-    return captureSeq(
+captureCase = \
+    transform(
+        types.Case,
+        captureSeq(
             captureCaseOf,
             skip(spaceOptional),
             twoPass(
                 parseMyLevel,
-                captureMany(captureOneCase),
+                captureOneOrMore(captureOneCase),
                 )
-            )(state)
+            )
+        )
 
-def captureCase(state):
-    res = captureCaseRaw(state)
-    if res is None:
-        return
+captureTuple = \
+    transform(
+        types.Tuple,
+        captureSeq(
+            skip(pKeyword('(')),
+            twoPass(
+                pUntilChar(')'),
+                capturePunt,
+                ),
+            skip(pKeyword(')')),
+            skip(spaceOptional)
+            ),
+        )
 
-    state, ast = res
-    return state, types.Case(ast)
+captureParams = \
+    transform(
+        types.Params,
+        captureZeroOrMore(
+            captureOneOf(
+                grab(token),
+                captureTuple,
+                )
+            )
+        )
 
-def captureDef(state):
-    return \
-        transform(
-            types.Def,
+captureDef = \
+    transform(
+        types.Def,
+        captureUntilKeywordEndsLine(
+            '=',
             captureSeq(
-                twoPass(
-                    pUntilLineEndsWith('='),
-                    captureSeq(
-                        grab(token),
-                        skip(spaceOptional),
-                        skip(parseParams),
-                        ),
-                    ),
-                skip(pLine),
+                grab(token),
                 skip(spaceOptional),
-                )
-            )(state)
+                captureParams,
+                ),
+            ),
+        )
 
 def captureBinding(state):
     return \
@@ -158,7 +182,7 @@ def captureBinding(state):
             )(state)
 
 captureLetBindings = \
-    captureMany(captureBinding)
+    captureOneOrMore(captureBinding)
 
 captureLet = \
     transform(
@@ -169,38 +193,20 @@ captureLet = \
             )
         )
 
-def parseTuple(state):
-    return bigSkip(
-            pKeyword('('),
-            pUntilChar(')'),
-            pKeyword(')'),
-            )(state)
-
-def parseParam(state):
-    return bigSkip(token)(state)
-
-def parseParams(state):
-    while True:
-        res = captureOneOf(
-                skip(parseParam),
-                skip(parseTuple),
-                )(state)
-
-        if res is None:
-            return state
-        state, _ = res
-
-def parseAnnotation(state):
-    newState = bigSkip(
-            token,
-            spaceOptional,
-            pKeyword(':'),
-            pLine,
-            )(state)
-    if newState is None:
-        return
-    state = parseBlock(state)
-    return state
+captureAnnotation = \
+    transform(
+        types.Annotation,
+        captureSeq(
+            onlyIf(
+                captureSeq(
+                    skip(token),
+                    skip(spaceOptional),
+                    pKeyword(':'),
+                    ),
+                grab(parseBlock),
+                ),
+            ),
+        )
 
 def captureNoise(state):
     return captureOneOf(
@@ -209,7 +215,7 @@ def captureNoise(state):
             skip(parseImport),
             skip(parseLineComment),
             skip(parseDocs),
-            skip(parseAnnotation),
+            captureAnnotation,
             )(state)
 
 skipNoise = skipManyCaptures(captureNoise)
@@ -223,7 +229,7 @@ def captureStuff(state):
 
 def parseGeneral(state):
     (state, ast) = skipNoise(state)
-    (state, ast) = captureMany(captureStuff)(state)
+    (state, ast) = captureOneOrMore(captureStuff)(state)
     return (state, ast)
 
 def parse(fn):
@@ -239,6 +245,14 @@ def parse(fn):
 
     printState(state)
 
+captureCall = \
+    transform(
+        types.Call,
+        captureOneOrMore(
+            grab(token),
+            )
+        )
+
 doCaptureExpr = \
     captureSeq(
         skipNoise,
@@ -246,6 +260,7 @@ doCaptureExpr = \
             captureLet,
             captureIf,
             captureCase,
+            captureCall,
             capturePunt,
             )
         )

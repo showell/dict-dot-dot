@@ -1,15 +1,21 @@
+
 """
 parser : state -> state
 capture : state -> (state, ast)
 """
+
+class CaptureManyFailure:
+    def __str__(self):
+        return 'CaptureManyFailure'
 
 def printState(state):
     (s, i) = state
     print('state:\n' + s[i:i+50])
 
 def transform(f, cap):
+
     def wrapper(state):
-        res = cap(state)
+        res = cap(state) # transform
         if res is None:
             return
         state, ast = res
@@ -25,10 +31,14 @@ def tokenChar(s, i):
     if c.isspace():
         return False
 
-    if c in '(),[]=':
+    if c in '(),[]=\\':
         return False
 
     return True
+
+def parseAll(state):
+    (s, i) = state
+    return (s, len(s))
 
 def bigSkip(*fns):
     def wrapper(state):
@@ -88,7 +98,7 @@ def twoPass(parse, f):
         (s, i) = newState
         blockText = s[iOrig:i]
         subState = (blockText, 0)
-        res = f(subState)
+        res = f(subState) # twoPass
         if res is None:
             return None
 
@@ -98,6 +108,7 @@ def twoPass(parse, f):
     return wrapper
 
 def grab(parse):
+
     def f(state):
         (s, iOrig) = state
         newState = parse(state)
@@ -129,10 +140,12 @@ def skip(parse):
 
     return f
 
-def captureMany(f):
+def captureZeroOrMore(f):
     def wrapper(state):
         asts = []
         while True:
+            state = spaceOptional(state)
+
             if peek(state, 'STOP'):
                 break
 
@@ -140,6 +153,27 @@ def captureMany(f):
             if res is None: break
             state, ast = res
             asts.append(ast)
+
+        asts = noSkips(asts)
+        return (state, asts)
+    return wrapper
+
+def captureOneOrMore(f):
+    def wrapper(state):
+        asts = []
+        while True:
+            state = spaceOptional(state)
+
+            if peek(state, 'STOP'):
+                break
+
+            res = f(state)
+            if res is None: break
+            state, ast = res
+            asts.append(ast)
+
+        if len(asts) == 0:
+            return
 
         asts = noSkips(asts)
         return (state, asts)
@@ -160,7 +194,7 @@ def captureSeq(*fns):
 
         asts = []
         for fn in fns:
-            res = fn(state)
+            res = fn(state) # captureSeq
             if res is None:
                 return
             state, ast = res
@@ -179,7 +213,7 @@ class Skip:
 def captureOneOf(*fns):
     def wrapper(state):
         for fn in fns:
-            res = fn(state)
+            res = fn(state) # captureOneOf
             if res is not None:
                 return res
     return wrapper

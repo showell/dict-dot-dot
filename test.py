@@ -1,5 +1,6 @@
 import parseElm
 import parse
+import types
 
 def succeed(res):
     if res is None:
@@ -10,6 +11,10 @@ def succeed(res):
         parse.printState(state)
         raise Exception('partial parse')
     print("\n---")
+
+    if type(ast) == types.UnParsed:
+        raise Exception('did not really parse')
+
     print(ast)
 
 
@@ -72,18 +77,20 @@ succeed(parseElm.captureCase(
     case fred of
         foo ->
             f foo
+                bla
 
         bar ->
             f bar
+                bla
         """)))
 
 succeed(parseElm.captureLet(
     st("""
     let
-        foo =
+        foo a b c =
             one
 
-        bar =
+        bar x y z =
             two
     in
     foo bar""")))
@@ -91,9 +98,29 @@ succeed(parseElm.captureLet(
 succeed(parseElm.captureIf(
     st("""
     if cond then
-        true_val
+        if cond2 then
+            a
+        else
+            b
 
     else
         false_val
+            stuff
         """)))
 
+# tuples are dumb now
+succeed(parseElm.captureTuple(
+    st("""
+        ( foo, bar )
+        """)))
+
+succeed(parseElm.captureExpr(
+    st("""
+        add 5 7
+        """)))
+
+succeed(parseElm.captureAnnotation(
+    st("""
+foo : List String ->
+   String ->
+   Int""")))

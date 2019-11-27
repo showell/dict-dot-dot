@@ -514,7 +514,6 @@ balanceUpdateRight clr key value left right =
             RBNode_elm_builtin clr key value left right
 
 
-
 -- COMBINE
 
 
@@ -582,10 +581,11 @@ merge leftStep bothStep rightStep leftDict rightDict initialResult =
     in
     List.foldl (\( k, v ) result -> leftStep k v result) intermediateResult leftovers
 
--- TRANSFORM
+
 
 STOP
 
+-- TRANSFORM
 
 {-| Apply a function to all values in a dictionary.
 -}
