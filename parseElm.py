@@ -7,24 +7,27 @@ from parse import (
         captureOneOf,
         captureSeq,
         captureSubBlock,
+        grab,
         optional,
         parseBlock,
         parseMyLevel,
         parseSameLine,
         peek,
+        printState,
         pKeyword,
         pUntil,
         skip,
         spaceOptional,
         spaceRequired,
         token,
+        transform,
         twoPass,
         )
 
 def capturePunt(state):
     (s, i) = state
     newState = ('', 0)
-    ast = 'unparsed: ' + s[i:]
+    ast = 'unparsed: ' + s[i:].strip()
     return (newState, ast)
 
 def parseType(state):
@@ -119,52 +122,127 @@ def captureExpr(state):
     return captureOneOf(
             captureLet,
             captureIf,
+            captureCase,
             capturePunt,
             )(state)
 
 def captureIf(state):
-    res = captureSeq(
-            skip(spaceOptional),
-            skip(pKeyword('if')),
-            skip(spaceRequired),
-            twoPass(pUntil('then'), captureExpr),
-            skip(pKeyword('then')),
-            twoPass(pUntil('else'), captureExpr),
-            captureSubBlock('else', captureExpr)
-            )(state)
-    if res is None:
-        return
-    state, ast = res
-
-    ast = 'if:\n' + str(ast[0]) + '\nthen:\n' + str(ast[1]) + '\nelse:\n' + str(ast[2])
-    return (state, ast)
-
-def captureDef(state):
-    return twoPass(
-            pUntil('\n'),
+    return \
+        transform(
+            types.If,
             captureSeq(
                 skip(spaceOptional),
-                skip(token),
-                skip(spaceOptional),
-                skip(parseParams),
-                skip(spaceOptional),
-                skip(pKeyword('=')),
-            ))(state)
+                skip(pKeyword('if')),
+                skip(spaceRequired),
+                twoPass(pUntil('then'), captureExpr),
+                skip(pKeyword('then')),
+                twoPass(pUntil('else'), captureExpr),
+                captureSubBlock('else', captureExpr)
+                )
+            )(state)
 
-def captureBinding(state):
-    res = captureSeq(
-            captureDef,
+def captureCaseOf(state):
+    return \
+        transform(
+            types.CaseOf,
+            captureSeq(
+                skip(spaceOptional),
+                twoPass(
+                    pUntil('\n'),
+                    captureSeq(
+                        skip(pKeyword('case ')),
+                        twoPass(
+                            pUntil(' of'),
+                            capturePunt,
+                            ),
+                        ),
+                    ),
+                skip(spaceOptional),
+                ),
+            )(state)
+
+def capturePatternDef(state):
+    return \
+        transform(
+            types.PatternDef,
+            captureSeq(
+                skip(spaceOptional),
+                twoPass(
+                    pUntil('\n'),
+                    twoPass(
+                        pUntil(' ->'),
+                        capturePunt,
+                        ),
+                    ),
+                skip(spaceOptional)
+                ),
+            )(state)
+
+def captureOneCase(state):
+    return \
+        transform(
+            types.OneCase,
+            captureSeq(
+                capturePatternDef,
+                skip(spaceOptional),
+                twoPass(
+                    parseMyLevel,
+                    captureExpr,
+                    ),
+                ),
+            )(state)
+
+def captureCaseRaw(state):
+    return captureSeq(
+            captureCaseOf,
             skip(spaceOptional),
             twoPass(
                 parseMyLevel,
-                captureExpr
-            ))(state)
+                captureMany(captureOneCase),
+                )
+            )(state)
 
+def captureCase(state):
+    res = captureCaseRaw(state)
     if res is None:
         return
 
-    state, asts = res
-    return state, asts[1]
+    state, ast = res
+    return state, types.Case(ast)
+
+def captureDef(state):
+    return \
+        transform(
+            types.Def,
+            captureSeq(
+                skip(spaceOptional),
+                twoPass(
+                    pUntil(' =\n'),
+                    captureSeq(
+                        grab(token),
+                        skip(spaceOptional),
+                        skip(parseParams),
+                        ),
+                    ),
+                skip(pKeyword(' =')),
+                skip(spaceOptional),
+                )
+            )(state)
+
+def captureBinding(state):
+    return \
+        transform(
+            types.Binding,
+            captureSeq(
+                captureDef,
+                skip(spaceOptional),
+                twoPass(
+                    parseMyLevel,
+                    captureExpr
+                    ),
+                skip(spaceOptional),
+                ),
+            )(state)
 
 def parseTuple(state):
     return bigSkip(
@@ -220,19 +298,15 @@ def skipNoise(state):
 
 def captureStuff(state):
     return captureOneOf(
+            captureNoise,
             captureType,
             captureBinding,
-            captureNoise,
             )(state)
 
 def parseGeneral(state):
     state = skipNoise(state)
     (state, ast) = captureMany(captureStuff)(state)
     return (state, ast)
-
-def printState(state):
-    (s, i) = state
-    print('state:\n' + s[i: i+30])
 
 def parse(fn):
     with open(fn) as f:
@@ -247,5 +321,6 @@ def parse(fn):
 
     printState(state)
 
-fn = 'src/DictDotDot.elm'
-parse(fn)
+if __name__ == '__main__':
+    fn = 'src/DictDotDot.elm'
+    parse(fn)

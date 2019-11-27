@@ -3,6 +3,19 @@ parser : state -> state
 capture : state -> (state, ast)
 """
 
+def printState(state):
+    (s, i) = state
+    print('state:\n' + s[i: i+30])
+
+def transform(f, cap):
+    def wrapper(state):
+        res = cap(state)
+        if res is None:
+            return
+        state, ast = res
+        return state, f(ast)
+    return wrapper
+
 def tokenChar(s, i):
     if i >= len(s):
         return False
@@ -82,6 +95,18 @@ def twoPass(parse, f):
 
     return wrapper
 
+def grab(parse):
+    def f(state):
+        (s, iOrig) = state
+        newState = parse(state)
+        if newState is None:
+            return
+        (_, iNew) = newState
+        text = s[iOrig:iNew]
+        return (newState, text)
+
+    return f
+
 def skip(parse):
     def f(state):
         newState = parse(state)
@@ -103,9 +128,18 @@ def captureMany(f):
             state, ast = res
             asts.append(ast)
 
-        asts = [a for a in asts if type(a) != Skip]
+        asts = noSkips(asts)
         return (state, asts)
     return wrapper
+
+def noSkips(asts):
+    return [a for a in asts if type(a) != Skip]
+
+def fixAsts(asts):
+    asts = noSkips(asts)
+    if len(asts) == 1:
+        return asts[0]
+    return asts
 
 def captureSeq(*fns):
     def wrapper(state):
@@ -117,8 +151,8 @@ def captureSeq(*fns):
             state, ast = res
             asts.append(ast)
 
-        asts = [a for a in asts if type(a) != Skip]
-        return (state, asts)
+        ast = fixAsts(asts)
+        return (state, ast)
     return wrapper
 
 class Skip:
