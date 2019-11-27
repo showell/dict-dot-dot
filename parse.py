@@ -208,19 +208,68 @@ def spaceRequired(state):
     return (s, i)
 
 
+def pKeyword(kw):
+    if kw != kw.strip():
+        raise Exception('do not pad until keywords; we already check boundaries')
+    n = len(kw)
+
+    def wrapper(state):
+        (s, i) = state
+        iEnd = i + n
+        if s[i : iEnd] == kw:
+            if isWord(s, i, iEnd):
+                return (s, iEnd)
+    return wrapper
+
+def pUntilIncluding(kw):
+    if kw != kw.strip():
+        raise Exception('do not pad until keywords')
+
+    n = len(kw)
+
+    def wrapper(state):
+        (s, i) = state
+        while i < len(s):
+            iEnd = i + n
+            if s[i:iEnd] == kw:
+                if isWord(s, i, iEnd):
+                    return (s, iEnd)
+            i += 1
+    return wrapper
+
 def pUntil(kw):
     if kw == '\n':
         raise Exception('use pLine for detecting end of line')
     if len(kw) == 1:
         raise Exception('use pUntilIncludingChar for single characters')
+    if kw != kw.strip():
+        raise Exception('do not pad until keywords; we already check boundaries')
+    n = len(kw)
 
     def wrapper(state):
         (s, i) = state
-        n = len(kw)
         while i < len(s):
-            if s[i:i+n] == kw:
-                return (s, i)
+            iEnd = i + n
+            if s[i:iEnd] == kw:
+                if isWord(s, i, iEnd):
+                    return (s, i)
             i += 1
+    return wrapper
+
+def pUntilLineEndsWith(kw):
+    if kw == '\n':
+        raise Exception('use pLine for detecting end of line')
+    if kw != kw.strip():
+        raise Exception('do not pad until keywords')
+    kw = ' ' + kw
+    n = len(kw)
+
+    def wrapper(state):
+        (s, i) = state
+        while i < len(s) and s[i] != '\n':
+            i += 1
+        if s[i-n:i] == kw:
+            return (s, i-n+1)
     return wrapper
 
 def pUntilChar(c):
@@ -241,16 +290,6 @@ def pLine(state):
     # end of file is equivalent to newline
     return (s, i)
 
-def pUntilIncluding(kw):
-    def wrapper(state):
-        (s, i) = state
-        n = len(kw)
-        while i < len(s):
-            if s[i:i+n] == kw:
-                return (s, i+n)
-            i += 1
-    return wrapper
-
 def isBeginWord(s, start):
     return start == 0 or s[start-1].isspace()
 
@@ -259,15 +298,6 @@ def isEndWord(s, end):
 
 def isWord(s, start, end):
     return isBeginWord(s, start) and isEndWord(s, end)
-
-def pKeyword(kw):
-    def wrapper(state):
-        (s, i) = state
-        iEnd = i + len(kw)
-        if s[i : iEnd] == kw:
-            if isWord(s, i, iEnd):
-                return (s, iEnd)
-    return wrapper
 
 def token(state):
     (s, i) = state
@@ -350,14 +380,8 @@ def captureKeywordBlock(keyword):
 def parseRange(start, end):
     return bigSkip(
             spaceOptional,
-            parseOneOf(
-                pKeyword(start + ' '),
-                pKeyword(start + '\n'),
-                ),
-            parseOneOf(
-                pUntilIncluding(' ' + end),
-                pUntilIncluding('\n' + end),
-                ),
+            pKeyword(start),
+            pUntilIncluding(end),
             spaceOptional
             )
 

@@ -20,6 +20,7 @@ from parse import (
         pLine,
         pUntil,
         pUntilChar,
+        pUntilLineEndsWith,
         skip,
         spaceOptional,
         spaceRequired,
@@ -121,12 +122,10 @@ def capturePatternDef(state):
             captureSeq(
                 skip(spaceOptional),
                 twoPass(
-                    pLine,
-                    twoPass(
-                        pUntil(' ->'),
-                        capturePunt,
-                        ),
+                    pUntilLineEndsWith('->'),
+                    capturePunt,
                     ),
+                skip(pLine),
                 skip(spaceOptional)
                 ),
             )(state)
@@ -170,15 +169,14 @@ def captureDef(state):
             captureSeq(
                 skip(spaceOptional),
                 twoPass(
-                    pUntil(' =\n'),
+                    pUntilLineEndsWith('='),
                     captureSeq(
                         grab(token),
                         skip(spaceOptional),
                         skip(parseParams),
                         ),
                     ),
-                skip(spaceOptional),
-                skip(pKeyword('=')),
+                skip(pLine),
                 skip(spaceOptional),
                 )
             )(state)
