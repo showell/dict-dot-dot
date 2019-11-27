@@ -51,16 +51,16 @@ class Def:
         return 'ASSIGN: ' + self.var
 
 class Let:
-    def __init__(self, bindings, in_):
-        self.bindings = bindings
-        self.in_ = in_
+    def __init__(self, ast):
+        self.bindings = ast[0]
+        self.expr = ast[1]
 
     def __str__(self):
         return j(
             'LET',
             indent(jj(self.bindings)),
             'IN',
-            indent(str(self.in_)))
+            indent(str(self.expr)))
 
 class Case:
     def __init__(self, ast):

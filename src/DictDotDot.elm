@@ -582,9 +582,9 @@ merge leftStep bothStep rightStep leftDict rightDict initialResult =
     in
     List.foldl (\( k, v ) result -> leftStep k v result) intermediateResult leftovers
 
-STOP
-
 -- TRANSFORM
+
+STOP
 
 
 {-| Apply a function to all values in a dictionary.

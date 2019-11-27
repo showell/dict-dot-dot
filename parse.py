@@ -109,6 +109,17 @@ def grab(parse):
 
     return f
 
+def skipManyCaptures(f):
+    def wrapper(state):
+        while True:
+            res = f(state)
+            if res is None:
+                break
+            state, _ = res
+        return (state, Skip())
+
+    return wrapper
+
 def skip(parse):
     def f(state):
         newState = parse(state)
@@ -145,12 +156,17 @@ def fixAsts(asts):
 
 def captureSeq(*fns):
     def wrapper(state):
+        state = spaceOptional(state)
+
         asts = []
         for fn in fns:
             res = fn(state)
             if res is None:
                 return
             state, ast = res
+            if type(state[0]) != str:
+                print(fn)
+                raise Exception('misconfigured')
             asts.append(ast)
 
         ast = fixAsts(asts)
@@ -159,14 +175,6 @@ def captureSeq(*fns):
 
 class Skip:
     pass
-
-def parseOneOf(*fns):
-    def wrapper(state):
-        for fn in fns:
-            res = fn(state)
-            if res is not None:
-                return res
-    return wrapper
 
 def captureOneOf(*fns):
     def wrapper(state):
@@ -371,6 +379,18 @@ def parseKeywordBlock(keyword):
             parseBlock
             )(state)
     return wrapper
+
+def captureUntilKeywordEndsLine(keyword, fCapture):
+    return \
+        captureSeq(
+            twoPass(
+                pUntilLineEndsWith(keyword),
+                fCapture
+                ),
+            skip(spaceOptional),
+            skip(pKeyword(keyword)),
+            skip(spaceOptional),
+            )
 
 def captureKeywordBlock(keyword):
     return captureSeq(
