@@ -583,8 +583,6 @@ merge leftStep bothStep rightStep leftDict rightDict initialResult =
 
 
 
-STOP
-
 -- TRANSFORM
 
 {-| Apply a function to all values in a dictionary.

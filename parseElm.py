@@ -1,15 +1,14 @@
 import types
 
 from parse import (
-        advanceState,
         bigSkip,
         captureKeywordBlock,
-        captureOneOrMore,
-        captureZeroOrMore,
         captureOneOf,
+        captureOneOrMore,
         captureSeq,
         captureSubBlock,
         captureUntilKeywordEndsLine,
+        captureZeroOrMore,
         grab,
         onlyIf,
         parseAll,
@@ -19,9 +18,9 @@ from parse import (
         parseRange,
         parseSameLine,
         peek,
-        printState,
         pKeyword,
         pLine,
+        printState,
         pUntil,
         pUntilChar,
         pUntilLineEndsWith,
@@ -33,6 +32,7 @@ from parse import (
         transform,
         twoPass,
         )
+import parse
 
 # We declare a few things to avoid circular dependencies
 def captureExpr(state):
@@ -166,20 +166,19 @@ captureDef = \
             ),
         )
 
-def captureBinding(state):
-    return \
-        transform(
-            types.Binding,
-            captureSeq(
-                captureDef,
-                skip(spaceOptional),
-                twoPass(
-                    parseMyLevel,
-                    captureExpr
-                    ),
-                skip(spaceOptional),
+captureBinding = \
+    transform(
+        types.Binding,
+        captureSeq(
+            captureDef,
+            skip(spaceOptional),
+            twoPass(
+                parseMyLevel,
+                captureExpr
                 ),
-            )(state)
+            skip(spaceOptional),
+            ),
+        )
 
 captureLetBindings = \
     captureOneOrMore(captureBinding)
@@ -201,49 +200,24 @@ captureAnnotation = \
                 captureSeq(
                     skip(token),
                     skip(spaceOptional),
-                    pKeyword(':'),
+                    skip(pKeyword(':')),
                     ),
                 grab(parseBlock),
                 ),
             ),
         )
 
-def captureNoise(state):
-    return captureOneOf(
-            skip(spaceRequired),
-            skip(parseModule),
-            skip(parseImport),
-            skip(parseLineComment),
-            skip(parseDocs),
-            captureAnnotation,
-            )(state)
+captureNoise = \
+    captureOneOf(
+        skip(spaceRequired),
+        skip(parseModule),
+        skip(parseImport),
+        skip(parseLineComment),
+        skip(parseDocs),
+        captureAnnotation,
+        )
 
 skipNoise = skipManyCaptures(captureNoise)
-
-def captureStuff(state):
-    return captureOneOf(
-            captureNoise,
-            captureType,
-            captureBinding,
-            )(state)
-
-def parseGeneral(state):
-    (state, ast) = skipNoise(state)
-    (state, ast) = captureOneOrMore(captureStuff)(state)
-    return (state, ast)
-
-def parse(fn):
-    with open(fn) as f:
-        s = f.read()
-
-    state = (s, 0)
-    (state, asts) = parseGeneral(state)
-
-    for ast in asts:
-        print('==')
-        print(ast)
-
-    printState(state)
 
 captureCall = \
     transform(
@@ -265,6 +239,31 @@ doCaptureExpr = \
             )
         )
 
+captureStuff = \
+    captureOneOf(
+        captureNoise,
+        captureType,
+        captureBinding,
+        )
+
+captureAll = \
+    captureSeq(
+        skipNoise,
+        captureOneOrMore(captureStuff)
+        )
+
+def parseCode(code):
+    state = parse.State(code)
+    (state, asts) = captureAll(state)
+
+    for ast in asts:
+        print('==')
+        print(ast)
+
+    printState(state)
+
 if __name__ == '__main__':
     fn = 'src/DictDotDot.elm'
-    parse(fn)
+    with open(fn) as f:
+        code = f.read()
+    parseCode(code)

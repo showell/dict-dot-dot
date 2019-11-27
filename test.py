@@ -6,7 +6,7 @@ def succeed(res):
     if res is None:
         raise Exception('parse failure')
     state, ast = res
-    (s, i) = state
+    (s, i) = state.position()
     if i != len(s):
         parse.printState(state)
         raise Exception('partial parse')
@@ -18,49 +18,46 @@ def succeed(res):
     print(ast)
 
 
-def st(s):
-    return (s, 0)
-
 succeed(parseElm.skip(parseElm.parseDocs)(
-    st("""
+    parse.State("""
     {-|
        bla bla bla
     -}
     """)))
 
 succeed(parseElm.skip(parseElm.parseImport)(
-    st("""
+    parse.State("""
 import foo exposing (
     foo, bar
     )
     """)))
 
 succeed(parseElm.skip(parseElm.parseModule)(
-    st("""
+    parse.State("""
     module foo exposing (
         foo, bar
         )
     """)))
 
 succeed(parseElm.captureType(
-    st("""
+    parse.State("""
     type Value =
         = Int
         | String
     """)))
 
 succeed(parseElm.captureDef(
-    st("""
+    parse.State("""
     x =
     """)))
 
 succeed(parseElm.captureBinding(
-    st("""
+    parse.State("""
     x =
         5""")))
 
 succeed(parseElm.captureOneCase(
-    st("""
+    parse.State("""
     foo bar ->
         hello
         world
@@ -68,12 +65,12 @@ succeed(parseElm.captureOneCase(
         """)))
 
 succeed(parseElm.captureCaseOf(
-    st("""
+    parse.State("""
     case fred of
         """)))
 
 succeed(parseElm.captureCase(
-    st("""
+    parse.State("""
     case fred of
         foo ->
             f foo
@@ -85,7 +82,7 @@ succeed(parseElm.captureCase(
         """)))
 
 succeed(parseElm.captureLet(
-    st("""
+    parse.State("""
     let
         foo a b c =
             one
@@ -96,7 +93,7 @@ succeed(parseElm.captureLet(
     foo bar""")))
 
 succeed(parseElm.captureIf(
-    st("""
+    parse.State("""
     if cond then
         if cond2 then
             a
@@ -110,17 +107,17 @@ succeed(parseElm.captureIf(
 
 # tuples are dumb now
 succeed(parseElm.captureTuple(
-    st("""
+    parse.State("""
         ( foo, bar )
         """)))
 
 succeed(parseElm.captureExpr(
-    st("""
+    parse.State("""
         add 5 7
         """)))
 
 succeed(parseElm.captureAnnotation(
-    st("""
+    parse.State("""
 foo : List String ->
    String ->
    Int""")))
