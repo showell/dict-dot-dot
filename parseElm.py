@@ -3,6 +3,7 @@ import types
 from parse import (
         advanceState,
         bigSkip,
+        captureKeywordBlock,
         captureMany,
         captureOneOf,
         captureSeq,
@@ -10,11 +11,14 @@ from parse import (
         grab,
         optional,
         parseBlock,
+        parseKeywordBlock,
         parseMyLevel,
+        parseRange,
         parseSameLine,
         peek,
         printState,
         pKeyword,
+        pLine,
         pUntil,
         skip,
         spaceOptional,
@@ -30,70 +34,19 @@ def capturePunt(state):
     ast = 'unparsed: ' + s[i:].strip()
     return (newState, ast)
 
-def parseType(state):
-    if peek(state, 'type'):
-        return parseBlock(state)
+captureType = \
+    transform(
+        types.Type,
+        captureKeywordBlock('type')
+    )
 
-captureType = twoPass(parseType, capturePunt)
+parseModule = parseKeywordBlock('module')
 
-def parseModule(state):
-    state = bigSkip(
-            pKeyword('module'),
-            spaceRequired,
-            token,
-            spaceRequired,
-            pKeyword('exposing'),
-            spaceOptional,
-            pKeyword('('),
-            spaceOptional,
-            )(state)
+parseDocs = parseRange('{-|', '-}')
 
-    if state is None: return
+parseLineComment = bigSkip(pKeyword('--'), pLine)
 
-    while True:
-        state = bigSkip(
-                token,
-                optional(pKeyword('(..)')),
-                spaceOptional
-                )(state)
-        if state is None: return
-
-        if peek(state, ')'):
-            state = advanceState(state, 1)
-            break
-
-        state = bigSkip(
-                pKeyword(','),
-                spaceOptional
-                )(state)
-        if state is None: return
-
-    state = spaceOptional(state)
-
-    return state
-
-def parseDocs(state):
-    state = bigSkip(
-            pKeyword('{-| '),
-            pUntil('-}'),
-            pKeyword('-}'),
-            spaceRequired
-            )(state)
-    return state
-
-def parseLineComment(state):
-    return bigSkip(
-            pKeyword('--'),
-            pUntil('\n'),
-            spaceOptional,
-            )(state)
-
-def parseImport(state):
-    return bigSkip(
-            pKeyword('import'),
-            pUntil('\n'),
-            spaceOptional,
-            )(state)
+parseImport = parseKeywordBlock('import')
 
 def captureLet(state):
     res = captureSeq(
@@ -148,11 +101,11 @@ def captureCaseOf(state):
             captureSeq(
                 skip(spaceOptional),
                 twoPass(
-                    pUntil('\n'),
+                    pLine,
                     captureSeq(
-                        skip(pKeyword('case ')),
+                        skip(pKeyword('case')),
                         twoPass(
-                            pUntil(' of'),
+                            pUntil('of'),
                             capturePunt,
                             ),
                         ),
@@ -168,7 +121,7 @@ def capturePatternDef(state):
             captureSeq(
                 skip(spaceOptional),
                 twoPass(
-                    pUntil('\n'),
+                    pLine,
                     twoPass(
                         pUntil(' ->'),
                         capturePunt,
@@ -224,7 +177,8 @@ def captureDef(state):
                         skip(parseParams),
                         ),
                     ),
-                skip(pKeyword(' =')),
+                skip(spaceOptional),
+                skip(pKeyword('=')),
                 skip(spaceOptional),
                 )
             )(state)
@@ -246,18 +200,13 @@ def captureBinding(state):
 
 def parseTuple(state):
     return bigSkip(
-            spaceOptional,
             pKeyword('('),
             pUntil(')'),
             pKeyword(')'),
-            spaceOptional
             )(state)
 
 def parseParam(state):
-    return bigSkip(
-            token,
-            spaceOptional
-            )(state)
+    return bigSkip(token)(state)
 
 def parseParams(state):
     while True:
@@ -275,7 +224,7 @@ def parseAnnotation(state):
             token,
             spaceOptional,
             pKeyword(':'),
-            pUntil('\n'),
+            pLine,
             )(state)
     if newState is None:
         return

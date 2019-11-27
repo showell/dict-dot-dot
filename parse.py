@@ -5,7 +5,7 @@ capture : state -> (state, ast)
 
 def printState(state):
     (s, i) = state
-    print('state:\n' + s[i: i+30])
+    print('state:\n' + s[i:i+50])
 
 def transform(f, cap):
     def wrapper(state):
@@ -32,9 +32,11 @@ def tokenChar(s, i):
 
 def bigSkip(*fns):
     def wrapper(state):
+        state = spaceOptional(state)
         for fn in fns:
             state = fn(state)
             if state is None: return
+        state = spaceOptional(state)
         return state
     return wrapper
 
@@ -43,7 +45,7 @@ def captureSubBlock(keyword, f):
         state = bigSkip(
                 spaceOptional,
                 pKeyword(keyword),
-                pUntil('\n'),
+                pLine,
                 spaceOptional
                 )(state)
         if not state:
@@ -55,7 +57,7 @@ def captureSubBlock(keyword, f):
 
 def parseSameLine(parse):
     return twoPassParse(
-            pUntil('\n'),
+            pLine,
             parse)
 
 def twoPassParse(parse1, parse2):
@@ -158,6 +160,14 @@ def captureSeq(*fns):
 class Skip:
     pass
 
+def parseOneOf(*fns):
+    def wrapper(state):
+        for fn in fns:
+            res = fn(state)
+            if res is not None:
+                return res
+    return wrapper
+
 def captureOneOf(*fns):
     def wrapper(state):
         for fn in fns:
@@ -216,16 +226,45 @@ def parseUntil(kw, state):
         i += 1
 
 def pUntil(kw):
+    if kw == '\n':
+        raise Exception('use pLine for detecting end of line')
     return lambda state: parseUntil(kw, state)
 
-def parseKeyword(kw, state):
+def pLine(state):
     (s, i) = state
-    if s[i : i + len(kw)] == kw:
-        i += len(kw)
-        return (s, i)
+    while i < len(s):
+        if s[i] == '\n':
+            return (s, i)
+        i += 1
+    return (s, i)
+
+def pUntilIncluding(kw):
+    def wrapper(state):
+        (s, i) = state
+        n = len(kw)
+        while i < len(s):
+            if s[i:i+n] == kw:
+                return (s, i+n)
+            i += 1
+    return wrapper
+
+def isBeginWord(s, start):
+    return start == 0 or s[start-1].isspace()
+
+def isEndWord(s, end):
+    return end >= len(s) or s[end].isspace()
+
+def isWord(s, start, end):
+    return isBeginWord(s, start) and isEndWord(s, end)
 
 def pKeyword(kw):
-    return lambda state: parseKeyword(kw, state)
+    def wrapper(state):
+        (s, i) = state
+        iEnd = i + len(kw)
+        if s[i : iEnd] == kw:
+            if isWord(s, i, iEnd):
+                return (s, iEnd)
+    return wrapper
 
 def token(state):
     (s, i) = state
@@ -281,4 +320,41 @@ def parseBlock(state):
         i = readline(s, i)
 
     return (s, i)
+
+def onlyIf(parse1, parse2):
+    def wrapper(state):
+        if parse1(state) is None:
+            return
+        return parse2(state)
+    return wrapper
+
+def parseKeywordBlock(keyword):
+    def wrapper(state):
+        state = spaceOptional(state)
+        if state is None:
+            return
+        return onlyIf(
+            pKeyword(keyword),
+            parseBlock
+            )(state)
+    return wrapper
+
+def captureKeywordBlock(keyword):
+    return captureSeq(
+        grab(parseKeywordBlock(keyword)),
+        skip(spaceOptional))
+
+def parseRange(start, end):
+    return bigSkip(
+            spaceOptional,
+            parseOneOf(
+                pKeyword(start + ' '),
+                pKeyword(start + '\n'),
+                ),
+            parseOneOf(
+                pUntilIncluding(' ' + end),
+                pUntilIncluding('\n' + end),
+                ),
+            spaceOptional
+            )
 

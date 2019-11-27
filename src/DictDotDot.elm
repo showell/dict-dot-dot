@@ -107,7 +107,6 @@ type Dict k v
       -- Temporary state used when removing elements
     | RBBlackMissing_elm_builtin (Dict k v)
 
-
 {-| Create an empty dictionary.
 -}
 empty : Dict k v

@@ -16,6 +16,34 @@ def succeed(res):
 def st(s):
     return (s, 0)
 
+succeed(parseElm.skip(parseElm.parseDocs)(
+    st("""
+    {-|
+       bla bla bla
+    -}
+    """)))
+
+succeed(parseElm.skip(parseElm.parseImport)(
+    st("""
+import foo exposing (
+    foo, bar
+    )
+    """)))
+
+succeed(parseElm.skip(parseElm.parseModule)(
+    st("""
+    module foo exposing (
+        foo, bar
+        )
+    """)))
+
+succeed(parseElm.captureType(
+    st("""
+    type Value =
+        = Int
+        | String
+    """)))
+
 succeed(parseElm.captureDef(
     st("""
     x =

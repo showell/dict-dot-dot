@@ -9,6 +9,15 @@ def j(*lst):
 def jj(lst):
     return '\n\n'.join(str(item) for item in lst)
 
+class Type:
+    def __init__(self, ast):
+        self.ast = ast
+
+    def __str__(self):
+        return j(
+            'TYPE',
+            self.ast)
+
 class Binding:
     def __init__(self, ast):
         self.def_ = ast[0]
