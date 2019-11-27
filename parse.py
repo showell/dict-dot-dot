@@ -73,10 +73,11 @@ def twoPass(parse, f):
         (s, i) = newState
         blockText = s[iOrig:i]
         subState = (blockText, 0)
-        _, ast = f(subState)
-        if ast is None:
+        res = f(subState)
+        if res is None:
             return None
 
+        _, ast = res
         return (newState, ast)
 
     return wrapper

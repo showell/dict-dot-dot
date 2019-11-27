@@ -9,6 +9,7 @@ from parse import (
         captureSubBlock,
         optional,
         parseBlock,
+        parseMyLevel,
         parseSameLine,
         peek,
         pKeyword,
@@ -91,18 +92,6 @@ def parseImport(state):
             spaceOptional,
             )(state)
 
-def parseDef(state):
-    return parseSameLine(
-            bigSkip(
-                token,
-                spaceOptional,
-                parseParams,
-                spaceOptional,
-                pKeyword('='),
-                spaceOptional,
-            )
-            )(state)
-
 def captureLet(state):
     res = captureSeq(
             captureSubBlock('let', captureLetBindings),
@@ -150,22 +139,32 @@ def captureIf(state):
     ast = 'if:\n' + str(ast[0]) + '\nthen:\n' + str(ast[1]) + '\nelse:\n' + str(ast[2])
     return (state, ast)
 
-def captureBindingBlock(state):
-    newState = parseDef(state)
+def captureDef(state):
+    return twoPass(
+            pUntil('\n'),
+            captureSeq(
+                skip(spaceOptional),
+                skip(token),
+                skip(spaceOptional),
+                skip(parseParams),
+                skip(spaceOptional),
+                skip(pKeyword('=')),
+            ))(state)
 
-    if newState is None:
-        printState(state)
-        raise Exception('bad definition')
-    return captureExpr(newState)
+def captureBinding(state):
+    res = captureSeq(
+            captureDef,
+            skip(spaceOptional),
+            twoPass(
+                parseMyLevel,
+                captureExpr
+            ))(state)
 
-def parseBinding(state):
-    origState = state
-    newState = parseDef(state)
-    if newState is None:
+    if res is None:
         return
-    return parseBlock(origState)
 
-captureBinding = twoPass(parseBinding, captureBindingBlock)
+    state, asts = res
+    return state, asts[1]
 
 def parseTuple(state):
     return bigSkip(
