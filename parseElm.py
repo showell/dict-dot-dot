@@ -9,7 +9,6 @@ from parse import (
         captureSeq,
         captureSubBlock,
         grab,
-        optional,
         parseBlock,
         parseKeywordBlock,
         parseMyLevel,
@@ -20,6 +19,7 @@ from parse import (
         pKeyword,
         pLine,
         pUntil,
+        pUntilChar,
         skip,
         spaceOptional,
         spaceRequired,
@@ -201,7 +201,7 @@ def captureBinding(state):
 def parseTuple(state):
     return bigSkip(
             pKeyword('('),
-            pUntil(')'),
+            pUntilChar(')'),
             pKeyword(')'),
             )(state)
 

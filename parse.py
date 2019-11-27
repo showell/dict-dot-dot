@@ -187,16 +187,6 @@ def advanceState(state, n):
     (s, i) = state
     return (s, i + n)
 
-def optional(f):
-    def wrapper(state, *args):
-        origState = state
-        res = f(state, *args)
-        if res is None:
-            return origState
-        return res
-
-    return wrapper
-
 def spaceOptional(state):
     (s, i) = state
     while i < len(s) and s[i].isspace():
@@ -217,18 +207,30 @@ def spaceRequired(state):
 
     return (s, i)
 
-def parseUntil(kw, state):
-    (s, i) = state
-    n = len(kw)
-    while i < len(s):
-        if s[i:i+n] == kw:
-            return (s, i)
-        i += 1
 
 def pUntil(kw):
     if kw == '\n':
         raise Exception('use pLine for detecting end of line')
-    return lambda state: parseUntil(kw, state)
+    if len(kw) == 1:
+        raise Exception('use pUntilIncludingChar for single characters')
+
+    def wrapper(state):
+        (s, i) = state
+        n = len(kw)
+        while i < len(s):
+            if s[i:i+n] == kw:
+                return (s, i)
+            i += 1
+    return wrapper
+
+def pUntilChar(c):
+    def wrapper(state):
+        (s, i) = state
+        while i < len(s):
+            if s[i] == c:
+                return (s, i)
+            i += 1
+    return wrapper
 
 def pLine(state):
     (s, i) = state
@@ -236,6 +238,7 @@ def pLine(state):
         if s[i] == '\n':
             return (s, i)
         i += 1
+    # end of file is equivalent to newline
     return (s, i)
 
 def pUntilIncluding(kw):
