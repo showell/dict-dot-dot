@@ -9,12 +9,12 @@ module DictInternal exposing (toInternalRepresentation)
 import DictDotDot exposing (..)
 
 
-type alias InternalNode k v =
-    { k : k
+type InternalNode k v =
+    Node { k : k
     , v : v
     , color : String
     , path : String
-    }
+    } | Missing String
 
 
 {-| Reveal internal representation of Dict for advanced testing/debugging.
@@ -46,7 +46,7 @@ toInternalRepresentation dict =
                                 Black ->
                                     "B"
 
-                        node =
+                        node = Node
                             { k = k
                             , v = v
                             , color = color
@@ -55,6 +55,9 @@ toInternalRepresentation dict =
                     in
                     nodeList (path ++ "l") left
                         ++ (node :: nodeList (path ++ "r") right)
+
+                RBBlackMissing_elm_builtin missingNode ->
+                    [ Missing path ]
 
                 _ ->
                     []

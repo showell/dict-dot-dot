@@ -64,19 +64,42 @@ subscriptions _ =
 view : Model -> Browser.Document Msg
 view model =
     let
-        d =
+        {- repro bug reported https://github.com/elm/core/pull/1033
+        -}
+        d1 =
             Dict.empty
-                |> Dict.insert 1 "one"
-                |> Dict.insert 2 "two"
-                |> Dict.insert 3 "three"
-                |> Dict.insert 4 "four"
+                |> Dict.insert 0 Nothing
+                |> Dict.insert 5 Nothing
+                |> Dict.insert 6 Nothing
+                |> Dict.insert 4 Nothing
+                |> Dict.insert 2 Nothing
+                |> Dict.insert 3 Nothing
+                |> Dict.insert 1 Nothing
+                |> Dict.insert 7 Nothing
+                |> Dict.remove 0
+                |> Dict.remove 5
+                |> Dict.remove 6
+                |> Dict.remove 4
+                |> Dict.remove 2
 
-        s =
-            d
+        d2 =
+            Dict.empty
+                |> Dict.insert 3 Nothing
+                |> Dict.insert 1 Nothing
+                |> Dict.insert 7 Nothing
+
+
+        s1 =
+            d1
+                |> DictInternal.toInternalRepresentation
+                |> Debug.toString
+                |> String.replace "}," "},\n "
+        s2 =
+            d2
                 |> DictInternal.toInternalRepresentation
                 |> Debug.toString
                 |> String.replace "}," "},\n "
     in
     { title = model.title
-    , body = [ Html.pre [] [ Html.text s ] ]
+    , body = [ Html.pre [] [ Html.text s1, Html.text "\n\n", Html.text s2 ] ]
     }
